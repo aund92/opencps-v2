@@ -155,8 +155,7 @@ public class DossierSyncManagementImpl implements DossierSyncManagement {
 				Dossier dossier = DossierLocalServiceUtil.fetchDossier(dossierSync.getDossierId());
 
 				// Get the latest ACTION of DOSSIER has been done
-				long dossierActionId = Validator.isNotNull(dossier) ? dossierActionId = dossier.getDossierActionId()
-						: 0l;
+				long dossierActionId = Validator.isNotNull(dossier) ? dossierActionId = dossier.getDossierActionId() : 0l;
 
 				if (dossierActionId != 0) {
 
@@ -266,11 +265,14 @@ public class DossierSyncManagementImpl implements DossierSyncManagement {
 
 			}
 
-			if (dossier != null) {
+			if (dossier != null && Validator.isNotNull(dossier.getDossierNo())) {
 				Map<String, Object> updateDossierNoParams = new LinkedHashMap<>();
-				params.put("dossierno", dossier.getDossierNo());
 
-				JSONObject resSynsDossierNo = rest.callPostAPI(groupId, HttpMethods.POST, "application/json",
+				properties.put("dossierno", dossier.getDossierNo());
+
+				//endPointSynDossierNo = endPointSynDossierNo + HttpUtil.encodeURL(dossier.getDossierNo());
+
+				JSONObject resSynsDossierNo = rest.callPostAPI(groupId, HttpMethods.PUT, "application/json",
 						RESTFulConfiguration.SERVER_PATH_BASE, endPointSynDossierNo, RESTFulConfiguration.SERVER_USER,
 						RESTFulConfiguration.SERVER_PASS, properties, updateDossierNoParams, serviceContext);
 
@@ -279,7 +281,6 @@ public class DossierSyncManagementImpl implements DossierSyncManagement {
 
 				}
 			}
-
 		}
 
 		// SyncDossierFile
@@ -370,7 +371,10 @@ public class DossierSyncManagementImpl implements DossierSyncManagement {
 
 		// Sync paymentStatus
 		if (method == 3) {
-			PaymentFile paymentFileClient = PaymentFileLocalServiceUtil.fectPaymentFile(dossierSyncId, refId);
+		    DossierSync sync = DossierSyncLocalServiceUtil.getDossierSync(dossierSyncId);
+		    
+			PaymentFile paymentFileClient = PaymentFileLocalServiceUtil.fectPaymentFile(
+			    sync.getDossierId(), sync.getDossierReferenceUid());
 			try {
 				File file = File.createTempFile(String.valueOf(System.currentTimeMillis()), StringPool.PERIOD + "tmp");
 
@@ -412,9 +416,9 @@ public class DossierSyncManagementImpl implements DossierSyncManagement {
 		}
 
 		// remove pending in DossierAction
-		int countDossierSync = DossierSyncLocalServiceUtil.countByGroupDossierId(groupId, dossierId);
+		int countDossierSync = DossierSyncLocalServiceUtil.countByDossierId(dossierId);
 
-		if (countDossierSync == 0) {
+		if (countDossierSync == 0 && clientDossierActionId > 0) {
 			DossierActionLocalServiceUtil.updatePending(clientDossierActionId, false);
 		}
 
@@ -574,8 +578,6 @@ public class DossierSyncManagementImpl implements DossierSyncManagement {
 
 			}
 
-			System.out.println(sb.toString());
-
 			conn.disconnect();
 
 		} catch (MalformedURLException e) {
@@ -671,8 +673,6 @@ public class DossierSyncManagementImpl implements DossierSyncManagement {
 				sb.append(output);
 
 			}
-
-			System.out.println(sb.toString());
 
 			conn.disconnect();
 

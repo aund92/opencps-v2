@@ -7,6 +7,7 @@ import javax.servlet.http.HttpServletRequest;
 import javax.ws.rs.BeanParam;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
+import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
@@ -176,7 +177,7 @@ public interface DossierManagement {
 
 	public Response doAction(@Context HttpServletRequest request, @Context HttpHeaders header, @Context Company company,
 			@Context Locale locale, @Context User user, @Context ServiceContext serviceContext,
-			@PathParam("id") String id, @BeanParam DoActionModel input);
+			@PathParam("id") String id, @BeanParam DoActionModel input, @FormParam("subUsers") String subUsers);
 
 	@GET
 	@Path("/{id}/contacts")
@@ -205,8 +206,8 @@ public interface DossierManagement {
 	public Response cloneDossier(@Context HttpHeaders header, @Context ServiceContext serviceContext,
 			@PathParam("id") long dossierId, @Context String referenceUid);
 
-	@POST
-	@Path("/{id}/dossierno/{dossierno}")
+	@PUT
+	@Path("/{id}/dossierno")
 	@Consumes({ MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON, MediaType.APPLICATION_FORM_URLENCODED })
 	@Produces({ MediaType.APPLICATION_XML, MediaType.APPLICATION_JSON })
 	@ApiOperation(value = "Processed to doing a ProcessAction on the Dossier", response = DoActionModel.class)
@@ -218,6 +219,6 @@ public interface DossierManagement {
 
 	public Response updateDossierNo(@Context HttpServletRequest request, @Context HttpHeaders header, @Context Company company,
 			@Context Locale locale, @Context User user, @Context ServiceContext serviceContext,
-			@PathParam("id") String id, @PathParam("dossierno") String dossierno);
+			@PathParam("id") String id);
 
 }

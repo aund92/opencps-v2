@@ -231,6 +231,7 @@ document.addEventListener('DOMContentLoaded', function (event) {
 									success : function(result){
 										vm.snackbartextpaymentViewJX = "Xác nhận thanh toán thành công!";
 										vm.snackbarpaymentViewJX = true;
+										vm.detailPage = false;
 									},
 									error : function(result){
 										vm.snackbartextpaymentViewJX = "Xác nhận thanh toán thất bại!";
@@ -320,6 +321,12 @@ document.addEventListener('DOMContentLoaded', function (event) {
 								value: 'applicantName'
 							},
 							{
+								text: 'Mã hồ sơ / Số hồ sơ',
+								align: 'center',
+								sortable: false,
+								value: 'dossierId'
+							},
+							{
 								text: 'Thao tác',
 								align: 'center',
 								sortable: false,
@@ -329,8 +336,8 @@ document.addEventListener('DOMContentLoaded', function (event) {
 						
 						var paramsBuilder = {
 								keyword: vm.keywordsSearch,
-								start: vm.paymentListpage * 8 - 8,
-								end: vm.paymentListpage * 8,
+								start: vm.paymentListpage * 15 - 15,
+								end: vm.paymentListpage * 15,
 						};
 						
 						if (vm.listgroupFilterselected === 4){
@@ -357,10 +364,10 @@ document.addEventListener('DOMContentLoaded', function (event) {
 								vm.paymentListItems.push.apply(vm.paymentListItems, serializable.data);
 							} else {
 								vm.paymentListItems = serializable.data;
-								vm.paymentListTotal = Math.ceil(serializable.total / 8);
+								vm.paymentListTotal = Math.ceil(serializable.total / 15);
 							}
 
-							vm.xem_them = 'Xem thêm 8+ bản ghi';
+							vm.xem_them = 'Xem thêm 15+ bản ghi';
 							if (serializable.data.length === 0) {
 								vm.xem_them = 'Tổng số ( ' + vm.paymentListItems.length + ' ) bản ghi'
 							}
@@ -417,8 +424,8 @@ document.addEventListener('DOMContentLoaded', function (event) {
 						
 					},
 					paggingPaymentList: function(){
-						this.start = this.start + 8;
-						this.end = this.end + 8;
+						this.start = this.start + 15;
+						this.end = this.end + 15;
 						
 						this._inipaymentList(true);
 					},

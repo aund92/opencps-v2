@@ -12,6 +12,7 @@ import java.util.Base64;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import javax.ws.rs.HttpMethod;
 
@@ -118,7 +119,11 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 			for (int i = 0; i < array.length(); i++) {
 				JSONObject object = array.getJSONObject(i);
 
-				pullDossier(company, object, systemUser);
+				try {
+					pullDossier(company, object, systemUser);
+				} catch (Exception e) {
+					_log.error(object.get(DossierTerm.DOSSIER_ID), e);
+				}
 			}
 
 		} catch (Exception e) {
@@ -194,6 +199,7 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 
 			if (Validator.isNull(desDossier)) {
 				// Create DOSSIER
+				
 
 				long desGroupId = syncServiceProcess.getGroupId();
 
@@ -237,10 +243,13 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 							.fetchBySPI_PRESC_AEV(syncServiceProcess.getServiceProcessId(), StringPool.BLANK, "SUBMIT");
 
 					long assignedUserId = processAction.getAssignUserId();
-
+					
+					String subUsers = StringPool.BLANK;
+					
 					actions.doAction(syncServiceProcess.getGroupId(), desDossierId, desDossier.getReferenceUid(),
 							processAction.getActionCode(), processAction.getProcessActionId(), applicantName,
-							applicantNote, assignedUserId, systemUser.getUserId(), serviceContext);
+
+							applicantNote, assignedUserId, systemUser.getUserId(), StringPool.BLANK, serviceContext);
 
 				} catch (Exception e) {
 					_log.info("SyncDossierUnsuccessfuly" + desDossier.getReferenceUid());
@@ -282,11 +291,15 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 						// doAction in this case is an Applicant object
 						String applicantNote = object.getString(DossierTerm.APPLICANT_NOTE);
 						String applicantName = object.getString(DossierTerm.APPLICANT_NAME);
-
+						
+						
+						String subUsers = StringPool.BLANK;
+						
 						actions.doAction(syncServiceProcess.getGroupId(), desDossier.getDossierId(),
 								desDossier.getReferenceUid(), processAction.getActionCode(),
 								processAction.getProcessActionId(), applicantName, applicantNote,
-								processAction.getAssignUserId(), systemUser.getUserId(), serviceContext);
+
+								processAction.getAssignUserId(), systemUser.getUserId(), StringPool.BLANK, serviceContext);
 
 					} else {
 						desDossier.setSubmitting(true);
@@ -489,7 +502,7 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 					String fileRef = object.getString("referenceUid");
 
 					// Get file from SERVER
-					String path = "dossiers/" + srcDossierId + "/payments/" + fileRef + "/confirmfile/noattachment";
+					String path = "dossiers/" + srcDossierId + "/payments/" + fileRef + "/confirm/noattachment";
 
 					URL url = new URL(RESTFulConfiguration.SERVER_PATH_BASE + path);
 
@@ -501,7 +514,7 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 
 					conn.setRequestProperty("Authorization", "Basic " + authStringEnc);
 
-					conn.setRequestMethod(HttpMethods.GET);
+					conn.setRequestMethod(HttpMethods.PUT);
 					conn.setDoInput(true);
 					conn.setDoOutput(true);
 					conn.setRequestProperty("Accept", "application/json");
@@ -516,16 +529,33 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 
 					} else {
 
-						String requestURL = RESTFulConfiguration.CLIENT_PATH_BASE + "dossiers/" + dossierId
+						String requestURL = "dossiers/" + dossierId
 								+ "/payments/" + fileRef + "/confirm/noattachment";
 
-						String clientAuthString = new String(Base64.getEncoder().encodeToString(
+						/*String clientAuthString = new String(Base64.getEncoder().encodeToString(
 								(RESTFulConfiguration.CLIENT_USER + StringPool.COLON + RESTFulConfiguration.CLIENT_PASS)
-										.getBytes()));
+										.getBytes()));*/
+						
+						InvokeREST callRest = new InvokeREST();
+						
+						HashMap<String, String> properties = new HashMap<String, String>();
 
-						pullPaymentFileNoAttach(requestURL, "UTF-8", groupId, dossierId, clientAuthString, 
+                        Map<String, Object> params = new HashMap<String, Object>();
+                        
+                        params.put("confirmNote", StringPool.BLANK);
+                        params.put("paymentMethod", object.getString("paymentMethod"));
+                        params.put("confirmPayload", object.getString("confirmPayload"));
+						
+                        callRest.callPostAPI(
+                            groupId, HttpMethod.PUT, "application/json",
+                            RESTFulConfiguration.CLIENT_PATH_BASE, requestURL,
+                            RESTFulConfiguration.CLIENT_USER,
+                            RESTFulConfiguration.CLIENT_PASS, properties, params,
+                            context);
+
+						/*pullPaymentFileNoAttach(requestURL, "UTF-8", groupId, dossierId, clientAuthString, 
 								StringPool.BLANK, object.getString("paymentMethod"), object.getString("confirmPayload"),
-								context);
+								context);*/
 
 					}
 
@@ -658,43 +688,52 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 					}
 
 				} else {
+					
+					DossierFile dossierFile = DossierFileLocalServiceUtil.getDossierFileByReferenceUid(dossierId,
+							fileRef);
+					
+					if (Validator.isNull(dossierFile)) {
+						
+						InputStream is = conn.getInputStream();
 
-					InputStream is = conn.getInputStream();
+						File tempFile = File.createTempFile(String.valueOf(System.currentTimeMillis()),
+								StringPool.PERIOD + ref.getString("fileType"));
 
-					File tempFile = File.createTempFile(String.valueOf(System.currentTimeMillis()),
-							StringPool.PERIOD + ref.getString("fileType"));
+						FileOutputStream outStream = new FileOutputStream(tempFile);
 
-					FileOutputStream outStream = new FileOutputStream(tempFile);
-
-					int bytesRead = -1;
-					byte[] buffer = new byte[BUFFER_SIZE];
-					while ((bytesRead = is.read(buffer)) != -1) {
-						outStream.write(buffer, 0, bytesRead);
-					}
-
-					outStream.close();
-					is.close();
-
-					String requestURL = RESTFulConfiguration.CLIENT_PATH_BASE + "dossiers/" + dossierId + "/files";
-
-					try {
-						DossierFile dossierFile = DossierFileLocalServiceUtil.getDossierFileByReferenceUid(dossierId,
-								fileRef);
-						if (Validator.isNotNull(dossierFile)) {
-							requestURL = requestURL + StringPool.FORWARD_SLASH + fileRef;
+						int bytesRead = -1;
+						byte[] buffer = new byte[BUFFER_SIZE];
+						while ((bytesRead = is.read(buffer)) != -1) {
+							outStream.write(buffer, 0, bytesRead);
 						}
-					} catch (Exception e) {
-						// TODO: Don't doing anything
+
+						outStream.close();
+						is.close();
+
+						String requestURL = RESTFulConfiguration.CLIENT_PATH_BASE + "dossiers/" + dossierId + "/files";
+
+	/*					try {
+							DossierFile dossierFile = DossierFileLocalServiceUtil.getDossierFileByReferenceUid(dossierId,
+									fileRef);
+							if (Validator.isNotNull(dossierFile)) {
+								requestURL = requestURL + StringPool.FORWARD_SLASH + fileRef;
+							}
+						} catch (Exception e) {
+							// TODO: Don't doing anything
+						}
+	*/					
+						
+
+						String clientAuthString = new String(Base64.getEncoder().encodeToString(
+								(RESTFulConfiguration.CLIENT_USER + StringPool.COLON + RESTFulConfiguration.CLIENT_PASS)
+										.getBytes()));
+
+						pullDossierFile(requestURL, "UTF-8", desGroupId, dossierId, clientAuthString, tempFile,
+								ref.getString("dossierTemplateNo"), ref.getString("dossierPartNo"),
+								ref.getString("fileTemplateNo"), ref.getString("displayName"), ref.getString("formData"),
+								dossierRef, fileRef, serviceContext);
 					}
 
-					String clientAuthString = new String(Base64.getEncoder().encodeToString(
-							(RESTFulConfiguration.CLIENT_USER + StringPool.COLON + RESTFulConfiguration.CLIENT_PASS)
-									.getBytes()));
-
-					pullDossierFile(requestURL, "UTF-8", desGroupId, dossierId, clientAuthString, tempFile,
-							ref.getString("dossierTemplateNo"), ref.getString("dossierPartNo"),
-							ref.getString("fileTemplateNo"), ref.getString("displayName"), ref.getString("formData"),
-							dossierRef, fileRef, serviceContext);
 				}
 
 				conn.disconnect();
@@ -743,6 +782,7 @@ public class DossierPullScheduler extends BaseSchedulerEntryMessageListener {
 			ServiceContext serviceContext) {
 
 		try {
+		    
 			MultipartUtility multipart = new MultipartUtility(requestURL, charset, desGroupId, authStringEnc,
 					HttpMethod.PUT);
 			// TODO; check logic here, if ref fileId in SERVER equal CLIENT

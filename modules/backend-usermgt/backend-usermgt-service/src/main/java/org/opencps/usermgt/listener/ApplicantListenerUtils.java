@@ -22,9 +22,7 @@ public class ApplicantListenerUtils {
 			
 			Notificationtemplate notificationtemplate = NotificationtemplateLocalServiceUtil
 					.fetchByF_NotificationtemplateByType(groupId, notiType);
-			
-			String body = getEmailBody(notiType, object, groupId);
-			
+			String body = getEmailBody(notificationtemplate, object);
 			String subject = notificationtemplate.getEmailSubject();
 			
 			payload.put("toName", object.get("toName"));
@@ -38,15 +36,13 @@ public class ApplicantListenerUtils {
 		return payload;
 	}
 
-	private static String getEmailBody(String notiType, JSONObject object, long groupId) {
+	private static String getEmailBody(Notificationtemplate notificationtemplate, JSONObject object) {
 
 		try {
-			Notificationtemplate notificationtemplate = NotificationtemplateLocalServiceUtil
-					.fetchByF_NotificationtemplateByType(groupId, notiType);
 
 			String emailBody = notificationtemplate.getEmailBody();
 
-			object.put(ApplicantListenerMessageKeys.ACTIVATION_LINK, notificationtemplate.getGuestUrlPattern());
+			object.put(ApplicantListenerMessageKeys.ACTIVATION_LINK, notificationtemplate.getUserUrlPattern() + object.get(ApplicantListenerMessageKeys.ACTIVATION_LINK));
 			object.put(ApplicantListenerMessageKeys.HOME_PAGE_URL, notificationtemplate.getGuestUrlPattern());
 			
 			String [] oldSubs = buildOldSubs(object);
@@ -56,6 +52,7 @@ public class ApplicantListenerUtils {
 			return StringUtil.replace(emailBody, oldSubs, newSubs);
 
 		} catch (Exception e) {
+			_log.error(e);
 			return StringPool.BLANK;
 		}
 
@@ -65,28 +62,11 @@ public class ApplicantListenerUtils {
 
 		StringBuffer sb = new StringBuffer();
 
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.ACTIVATION_CODE))) {
-			sb.append(ApplicantListenerMessageKeys.ACTIVATION_CODE);
-			sb.append(StringPool.COMMA);
-		}
-
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.ACTIVATION_LINK))) {
-			sb.append(ApplicantListenerMessageKeys.ACTIVATION_LINK);
-			sb.append(StringPool.COMMA);
-		}
-
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.USER_NAME))) {
-			sb.append(ApplicantListenerMessageKeys.USER_NAME);
-			sb.append(StringPool.COMMA);
-		}
-
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.HOME_PAGE_URL))) {
-			sb.append(ApplicantListenerMessageKeys.HOME_PAGE_URL);
-			sb.append(StringPool.COMMA);
-		}
-		
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.PASSWORD))) {
-			sb.append(ApplicantListenerMessageKeys.PASSWORD);
+		for (int i = 0; i < object.names().length(); i++) {
+			String key = object.names().getString(i);
+			//String value = (String) object.get(key);
+			sb.append(key);
+			_log.info("APPLICANT notification key =========" + key);
 			sb.append(StringPool.COMMA);
 		}
 
@@ -96,31 +76,15 @@ public class ApplicantListenerUtils {
 	private static String[] buildNewSubs(JSONObject object) {
 
 		StringBuffer sb = new StringBuffer();
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.ACTIVATION_CODE))) {
-
-			sb.append(object.get(ApplicantListenerMessageKeys.ACTIVATION_CODE));
-			sb.append(StringPool.COMMA);
-		}
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.ACTIVATION_LINK))) {
-			
-			sb.append(object.get(ApplicantListenerMessageKeys.HOME_PAGE_URL).toString() + object.get(ApplicantListenerMessageKeys.ACTIVATION_CODE).toString());
-			sb.append(StringPool.COMMA);
-			
-		}
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.USER_NAME))) {
-			sb.append(object.get(ApplicantListenerMessageKeys.USER_NAME));
-			sb.append(StringPool.COMMA);
-		}
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.HOME_PAGE_URL))) {
-			sb.append(object.get(ApplicantListenerMessageKeys.HOME_PAGE_URL));
+		for (int i = 0; i < object.names().length(); i++) {
+			String key = object.names().getString(i);
+			String value = (String) object.get(key);
+			_log.info("APPLICANT notification key =========" + key);
+			_log.info("APPLICANT notification value =========" + value);
+			sb.append(value);
 			sb.append(StringPool.COMMA);
 		}
 
-		if (Validator.isNotNull(object.get(ApplicantListenerMessageKeys.PASSWORD))) {
-			sb.append(object.get(ApplicantListenerMessageKeys.PASSWORD));
-			sb.append(StringPool.COMMA);
-		}
-		
 		return StringUtil.split(sb.toString(), StringPool.COMMA);
 
 	}

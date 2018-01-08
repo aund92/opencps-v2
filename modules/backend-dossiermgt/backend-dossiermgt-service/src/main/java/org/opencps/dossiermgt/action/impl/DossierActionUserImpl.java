@@ -15,6 +15,9 @@ import org.opencps.dossiermgt.service.ProcessStepRoleLocalServiceUtil;
 import org.opencps.dossiermgt.service.persistence.DossierActionUserPK;
 
 import com.liferay.portal.kernel.exception.PortalException;
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
 import com.liferay.portal.kernel.model.User;
 import com.liferay.portal.kernel.service.UserLocalServiceUtil;
 
@@ -76,6 +79,36 @@ public class DossierActionUserImpl implements DossierActionUser {
 				// Add User
 				DossierActionUserLocalServiceUtil.addDossierActionUser(model);
 			}
+		}
+	}
+
+	@Override
+	public void assignDossierActionUser(long dossierActionId, long userId, long groupId, long assignUserId, JSONArray subUsers)
+			throws PortalException {
+		// Get list user
+		// TODO insert to actionUser
+		boolean assigned = true;
+		org.opencps.dossiermgt.model.DossierActionUser model = new org.opencps.dossiermgt.model.impl.DossierActionUserImpl();
+		model.setUserId(assignUserId);
+		model.setDossierActionId(dossierActionId);
+		model.setModerator(1);
+		model.setAssigned(assigned);
+		model.setVisited(false);
+		// Add User
+		DossierActionUserLocalServiceUtil.addDossierActionUser(model);
+		for (int n = 0; n < subUsers.length(); n++) {
+			JSONObject subUser = subUsers.getJSONObject(n);
+
+			assigned = false;
+			model = new org.opencps.dossiermgt.model.impl.DossierActionUserImpl();
+			model.setUserId(subUser.getLong("userId"));
+			model.setDossierActionId(dossierActionId);
+			model.setModerator(0);
+			model.setAssigned(assigned);
+			model.setVisited(false);
+			// Add User
+			DossierActionUserLocalServiceUtil.addDossierActionUser(model);
+
 		}
 	}
 

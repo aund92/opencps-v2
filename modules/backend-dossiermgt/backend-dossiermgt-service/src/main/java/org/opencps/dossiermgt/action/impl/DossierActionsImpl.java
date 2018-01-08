@@ -60,6 +60,8 @@ import com.liferay.portal.kernel.json.JSONFactoryUtil;
 import com.liferay.portal.kernel.json.JSONObject;
 import com.liferay.portal.kernel.log.Log;
 import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.messaging.Message;
+import com.liferay.portal.kernel.messaging.MessageBusUtil;
 import com.liferay.portal.kernel.model.User;
 import com.liferay.portal.kernel.search.Field;
 import com.liferay.portal.kernel.search.Hits;
@@ -332,7 +334,7 @@ public class DossierActionsImpl implements DossierActions {
 										createFile.put("partTip", dossierPart.getPartTip());
 										createFile.put("multiple", dossierPart.getMultiple());
 										createFile.put("templateFileNo", dossierPart.getFileTemplateNo());
-										
+
 										long fileEntryId = 0;
 										boolean eForm = false;
 										String formData = StringPool.BLANK;
@@ -340,6 +342,7 @@ public class DossierActionsImpl implements DossierActions {
 										String docFileReferenceUid = StringPool.BLANK;
 										boolean returned = false;
 										int counter = 0;
+										long dossierFileId = 0;
 
 										List<DossierFile> dossierFilesResult = DossierFileLocalServiceUtil
 												.getDossierFileByDID_FTNO_DPT(dossierId, fileTemplateNo, 2, false,
@@ -358,16 +361,17 @@ public class DossierActionsImpl implements DossierActions {
 															.contains(dossierFile.getFileTemplateNo())) {
 														returned = true;
 													}
+													
+													dossierFileId = dossierFile.getDossierFileId();
 
 													break df;
 												}
 											}
 										} else {
 											eForm = Validator.isNotNull(dossierPart.getFormScript()) ? true : false;
-											_log.info("*********================================***************************");
-											_log.info("*********================================dossierId***************************" + dossierId);
-											_log.info("*********================================dossierPart.getSampleData()***************************" + dossierPart.getSampleData());
-											formData = AutoFillFormData.sampleDataBinding(dossierPart.getSampleData(), dossierId, serviceContext);
+										
+											formData = AutoFillFormData.sampleDataBinding(dossierPart.getSampleData(),
+													dossierId, serviceContext);
 											formScript = dossierPart.getFormScript();
 
 											if (returnDossierFileTemplateNos
@@ -381,11 +385,13 @@ public class DossierActionsImpl implements DossierActions {
 
 												DossierFile dossierFile = actions.addDossierFile(groupId, dossierId,
 														referenceUid, dossier.getDossierTemplateNo(),
-														dossierPart.getPartNo(), fileTemplateNo, StringPool.BLANK,
+														dossierPart.getPartNo(), fileTemplateNo, dossierPart.getPartName(),
 														StringPool.BLANK, 0L, null, StringPool.BLANK,
 														String.valueOf(false), serviceContext);
 
 												docFileReferenceUid = dossierFile.getReferenceUid();
+												
+												dossierFileId = dossierFile.getDossierFileId();
 											}
 
 										}
@@ -398,6 +404,7 @@ public class DossierActionsImpl implements DossierActions {
 												? dossierFilesResult.size() : 0;
 
 										createFile.put("eform", eForm);
+										createFile.put("dossierFileId", dossierFileId);
 										createFile.put("formData", formData);
 										createFile.put("formScript", formScript);
 										createFile.put("referenceUid", docFileReferenceUid);
@@ -471,7 +478,7 @@ public class DossierActionsImpl implements DossierActions {
 
 	@Override
 	public DossierAction doAction(long groupId, long dossierId, String referenceUid, String actionCode,
-			long processActionId, String actionUser, String actionNote, long assignUserId, long userId,
+			long processActionId, String actionUser, String actionNote, long assignUserId, long userId, String subUsers,
 			ServiceContext context) throws PortalException {
 
 		// Add DossierAction
@@ -517,10 +524,49 @@ public class DossierActionsImpl implements DossierActions {
 			DossierPaymentUtils.processPaymentFile(processAction.getPaymentFee(), groupId, dossierId, userId, context,
 					serviceProcess.getServerNo());
 		}
+		// TODO
+		// Add KYSO fin processAction
+		if (processAction.getESignature()) {
+			
+			// get DossierFile 
+			String fileTemplateNos = processAction.getCreateDossierFiles();
+			
+			if (Validator.isNotNull(fileTemplateNos)) {
+				String[] fileTemplateNoArray = fileTemplateNos.split(StringPool.COMMA);
+				
+				for (String fileTemplateNo : fileTemplateNoArray) {
+					
+					List<DossierFile> dossierFiles = DossierFileLocalServiceUtil.getDossierFileByDID_FTNO_DPT(dossierId, fileTemplateNo, 2, false);
+					
+					for (DossierFile dossierFile : dossierFiles) {
+						
+						// GetDossierPart to find eSign
+						DossierPart dossierPart = DossierPartLocalServiceUtil.fetchByTemplatePartNo(dossierFile.getGroupId(),
+								dossierFile.getDossierTemplateNo(), dossierFile.getDossierPartNo());
+						
+						// if dossierPart.getESign() == true send message to KYSO process 
+						if (dossierPart.getESign()) {
+							// Binhth add message bus to processing KySO file
+							Message message = new Message();
+							
+							JSONObject msgDataESign = JSONFactoryUtil.createJSONObject();
+							msgDataESign.put("dossierFileId", dossierFile.getDossierFileId());
+							msgDataESign.put("userId", dossierFile.getUserId());
+							msgDataESign.put("eSign", dossierPart.getESign());
+							msgDataESign.put("fileEntryId", dossierFile.getFileEntryId());
 
-		if (Validator.isNull(processAction))
-			throw new NotFoundException("ProcessActionNotFoundException");
-
+							message.put("msgToEngine", msgDataESign);
+							MessageBusUtil.sendMessage("kyso/engine/out/destination", message);
+						}
+						
+					}
+					
+				}
+			}
+			
+		}
+		
+		
 		boolean isSubmitType = isSubmitType(processAction);
 
 		boolean hasDossierSync = false;
@@ -573,8 +619,13 @@ public class DossierActionsImpl implements DossierActions {
 
 			DossierActionUserImpl dossierActionUser = new DossierActionUserImpl();
 
-			dossierActionUser.initDossierActionUser(dossierAction.getDossierActionId(), userId, groupId, assignUserId);
-
+			if (Validator.isNotNull(subUsers)) {
+				JSONArray subUsersArray = JSONFactoryUtil.createJSONArray(subUsers);
+				dossierActionUser.assignDossierActionUser(dossierAction.getDossierActionId(), userId, groupId, assignUserId, subUsersArray);
+			} else {
+				dossierActionUser.initDossierActionUser(dossierAction.getDossierActionId(), userId, groupId, assignUserId);
+			}
+			
 			dossier = DossierLocalServiceUtil.updateStatus(groupId, dossierId, referenceUid, DossierStatusConstants.NEW,
 					jsStatus.getString(DossierStatusConstants.NEW), StringPool.BLANK, StringPool.BLANK, context);
 
@@ -606,7 +657,12 @@ public class DossierActionsImpl implements DossierActions {
 
 			DossierActionUserImpl dossierActionUser = new DossierActionUserImpl();
 
-			dossierActionUser.initDossierActionUser(dossierAction.getDossierActionId(), userId, groupId, assignUserId);
+			if (Validator.isNotNull(subUsers)) {
+				JSONArray subUsersArray = JSONFactoryUtil.createJSONArray(subUsers);
+				dossierActionUser.assignDossierActionUser(dossierAction.getDossierActionId(), userId, groupId, assignUserId, subUsersArray);
+			} else {
+				dossierActionUser.initDossierActionUser(dossierAction.getDossierActionId(), userId, groupId, assignUserId);
+			}
 
 			// Set dossierStatus by CUR_STEP
 			dossier = DossierLocalServiceUtil.updateStatus(groupId, dossierId, referenceUid, curStep.getDossierStatus(),
@@ -626,7 +682,7 @@ public class DossierActionsImpl implements DossierActions {
 				// sc.setCompanyId(dossier.getCompanyId());
 
 				String dossierRef = DossierNumberGenerator.generateDossierNumber(groupId, dossier.getCompanyId(),
-						dossierId, serviceProcess.getDossierNoPattern(), params);
+						dossierId, option.getProcessOptionId(), serviceProcess.getDossierNoPattern(), params);
 
 				dossier.setDossierNo(dossierRef);
 				// To index
@@ -845,6 +901,11 @@ public class DossierActionsImpl implements DossierActions {
 			String dossierStatus = dossier.getDossierStatus();
 
 			String dossierSubStatus = dossier.getDossierSubStatus();
+			
+			//TODO:
+			if(actions == null || (actions != null && actions.size() == 0)) {
+				throw new NotFoundException();
+			}
 
 			for (ProcessAction act : actions) {
 
@@ -861,12 +922,17 @@ public class DossierActionsImpl implements DossierActions {
 
 						action = act;
 						break;
+					} else {
+						// right
+						
 					}
 				}
 			}
 
 		} catch (Exception e) {
-			throw new NotFoundException("NotProcessActionFound");
+			throw new NotFoundException(
+					"ProcessActionNotFoundException with actionCode= "
+							+ actionCode + "|serviceProcessId= " + serviceProcessId + "|referenceUid= " + refId + "|groupId= " + groupId);
 		}
 
 		return action;
@@ -1052,9 +1118,10 @@ public class DossierActionsImpl implements DossierActions {
 				 * statistics.put(statistic); }
 				 */
 
-				List<DictItem> dictItems = DictItemLocalServiceUtil
+				/*List<DictItem> dictItems = DictItemLocalServiceUtil
 						.findByF_dictCollectionId_parentItemId(dictCollection.getDictCollectionId(), 0);
-
+				
+				
 				for (DictItem dictItem : dictItems) {
 
 					statusCode = dictItem.getItemCode();
@@ -1105,6 +1172,40 @@ public class DossierActionsImpl implements DossierActions {
 							statistics.put(childStatistic);
 						}
 					}
+				}*/
+				
+				List<DictItem> dictItems = DictItemLocalServiceUtil
+						.findByF_dictCollectionId(dictCollection.getDictCollectionId());
+				
+				for (DictItem dictItem : dictItems) {
+
+					statusCode = StringPool.BLANK;
+					subStatusCode = StringPool.BLANK;
+					
+					if(dictItem.getParentItemId() != 0){
+						subStatusCode = dictItem.getItemCode();
+						DictItem parentDictItem = DictItemLocalServiceUtil.getDictItem(dictItem.getParentItemId());
+						statusCode = parentDictItem.getItemCode();
+					}else{
+						statusCode = dictItem.getItemCode();
+					}
+					params.put(DossierTerm.STATUS, statusCode);
+					params.put(DossierTerm.SUBSTATUS, subStatusCode);
+
+					long count = DossierLocalServiceUtil.countLucene(params, searchContext);
+
+					JSONObject statistic = JSONFactoryUtil.createJSONObject();
+
+					statistic.put("dossierStatus", statusCode);
+					statistic.put("dossierSubStatus", subStatusCode);
+					statistic.put("level", dictItem.getLevel());
+					statistic.put("statusName", dictItem.getItemName());
+					statistic.put("count", count);
+					if(dictItem.getParentItemId() == 0){
+						total += count;
+					}
+					
+					statistics.put(statistic);
 				}
 			}
 
