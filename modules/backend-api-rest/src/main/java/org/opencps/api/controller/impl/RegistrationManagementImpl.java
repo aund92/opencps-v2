@@ -125,8 +125,10 @@ public class RegistrationManagementImpl implements RegistrationManagement {
 	}
 
 	@Override
-	public Response add(HttpHeaders header, ServiceContext serviceContext, RegistrationInputModel input) {
+	public Response add(HttpHeaders header, Company company, ServiceContext serviceContext, RegistrationInputModel input) {
 		RegistrationDetailModel result = null;
+		
+		long companyId = company.getCompanyId();
 		try {
 			long groupId = GetterUtil.getLong(header.getHeaderString("groupId"));
 			String cityName = "";
@@ -147,7 +149,11 @@ public class RegistrationManagementImpl implements RegistrationManagement {
 			}
 			RegistrationActions action = new RegistrationActionsImpl();
 
+<<<<<<< HEAD
 			Registration registration = action.insert(groupId, input.getApplicantName(), input.getApplicantIdType(),
+=======
+			Registration registration = action.insert(groupId, companyId, input.getApplicantName(), input.getApplicantIdType(),
+>>>>>>> 15f6732f01ad42059b75998901aec7852563d97a
 					input.getApplicantIdNo(), input.getApplicantIdDate(), input.getAddress(), input.getCityCode(),
 					cityName, input.getDistrictCode(), districtName, input.getWardCode(), wardName,
 					input.getContactName(), input.getContactTelNo(), input.getContactEmail(), input.getGovAgencyCode(),
@@ -269,6 +275,7 @@ public class RegistrationManagementImpl implements RegistrationManagement {
 			String formNo) {
 		BackendAuth auth = new BackendAuthImpl();
 		RegistrationFormDetailModel result = null;
+		long companyId = company.getCompanyId();
 		try {
 
 			if (!auth.isAuth(serviceContext)) {
@@ -286,7 +293,11 @@ public class RegistrationManagementImpl implements RegistrationManagement {
 
 			String referenceUid = UUID.randomUUID().toString();
 
+<<<<<<< HEAD
 			RegistrationForm registrationForm = RegistrationFormLocalServiceUtil.addRegistrationForm(groupId,
+=======
+			RegistrationForm registrationForm = RegistrationFormLocalServiceUtil.addRegistrationForm(groupId, companyId,
+>>>>>>> 15f6732f01ad42059b75998901aec7852563d97a
 					registrationId, referenceUid, registrationTemplate.getFormNo(), registrationTemplate.getFormName(),
 					registrationTemplate.getSampleData(), registrationTemplate.getFormScript(),
 					registrationTemplate.getFormReport(), 0, true, false, serviceContext);
@@ -399,7 +410,12 @@ public class RegistrationManagementImpl implements RegistrationManagement {
 	}
 
 	@Override
+<<<<<<< HEAD
 	public Response submitting(ServiceContext serviceContext, long registrationId) {
+=======
+	public Response submitting(HttpServletRequest request, HttpHeaders header, Company company, Locale locale,
+			User user, ServiceContext serviceContext, long registrationId) {
+>>>>>>> 15f6732f01ad42059b75998901aec7852563d97a
 
 		BackendAuth auth = new BackendAuthImpl();
 		try {
